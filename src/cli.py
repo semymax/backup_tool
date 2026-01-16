@@ -1,0 +1,94 @@
+from pathlib import Path
+import click
+import shutil
+from datetime import datetime
+
+from src.backup import create_tar
+from src.compress import compress_zstd
+from src.checksum import sha256
+from src.upload import upload_rclone
+
+def resolve_output_path(output: Path, zsuffix: str) -> Path:
+    if output.exists():
+        if output.is_dir():
+            base = f"backup-{datetime.now():%Y%m%d_%H%M%S}"
+            return output / f"{base}{zsuffix}"
+        if output.is_file():
+            return output.with_suffix(zsuffix)
+        raise click.UsageError(f"Invalid output path: {output}")
+
+    if output.parent.exists():
+        return output.with_suffix(zsuffix)
+    
+    raise click.UsageError(f"Invalid output path: {output}")
+
+@click.group()
+def cli():
+    """ Simple backup tool with zstd compression """
+    pass
+    
+@cli.command()
+@click.argument(
+    "sources",
+    type=click.Path(exists=True, path_type=Path),
+    nargs=-1
+)
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    default="."
+)
+@click.option(
+    "--level",
+    "-l",
+    type=click.IntRange(0, 22),
+    default=3,
+    help="Level to be used for the zstd algorithm"
+)
+@click.option(
+    "--rclone",
+    help="Rclone destiny (ex: remote:backups)"
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    help="Overwrite output file if it already exists"
+)
+def create(sources, output, level, rclone, force):
+    if not sources:
+        raise click.UsageError("No source provided")
+
+    zsuffix = ".tar.zst"
+    
+    final_path = resolve_output_path(output, zsuffix)
+    if final_path.exists():
+        if not force:
+            raise click.UsageError(f"Output file already exists: {final_path}. (use --force to overwrite)")
+        final_path.unlink()
+    else:
+        final_path.parent.mkdir(parents=True, exist_ok=True)
+
+    click.echo(f"Adding {len(sources)} source(s) to the backup file...")
+    tar_path = create_tar(list(sources))
+    
+    click.echo("Compressing with zstd...")
+    try:
+        zst_path = compress_zstd(tar_path, level)
+    except Exception:
+        if tar_path.exists():
+            tar_path.unlink()
+        raise
+    
+    shutil.move(zst_path, final_path)
+    
+    click.echo("Generating checksum...")
+    sha256(final_path)
+
+    if rclone:
+        click.echo(f"Uploading to {rclone}")
+        upload_rclone(final_path, rclone)
+        
+if __name__ == "__main__":
+    cli()
