@@ -38,12 +38,18 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Safety Notes
+
+At this point this is an unfinished tool, still in development and shouldn't be used as a safe tool for backups.
+But if you still consider using it, it's recommendable to test restoring any backups before relying on it.
+Always avoid running this tool as root, unless you know what you're doing.
+
 ## CLI (Command Line Interface)
 
-This tool provides a CLI for creating backups.
-Usage:
+This tool provides a CLI for creating and restoring backups.
+`create`:
 
-```bash
+```md
 python -m src.cli create [OPTIONS] [SOURCES]...
 
 Options
@@ -56,17 +62,35 @@ Options
 --help                       Show this message and exit
 ```
 
+`restore`:
+
+```md
+python -m src.cli restore [OPTIONS] BACKUP
+
+Options:
+  -o, --output PATH
+  --no-checksum      Skip checksum verification
+  -f, --force        Overwrite files in destination if they exist
+  --help             Show this message and exit.
+```
+
 ### Notes
+
+When creating a backup:
 
 - At least one source path must be provided.
 
-- If the output file already exists and `--force` is not specified, the command will exit with an error.
-
 - When `--rclone` is provided, the backup file is uploaded using the `rclone` CLI.
+
+- If the output path does not include a file extension `.tar.zstd` willl be appended automatically.
+
+In both cases:
+
+- If the output file already exists and `--force` is not specified, the command will exit with an error.
 
 ### Examples
 
-Create a backup of `/home/user/projects` and store it in`/home/user/backups`:
+Create a backup of `/home/user/projects` and store it in `/home/user/backups`:
 
 ```bash
 python -m src.cli create /home/user/projects \

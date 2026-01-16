@@ -8,6 +8,10 @@ from src.compress import compress_zstd
 from src.checksum import sha256
 from src.upload import upload_rclone
 
+from src.decompress import decompress_zstd
+from src.extract import extract_tar
+from src.verify import verify_sha256
+
 def resolve_output_path(output: Path, zsuffix: str) -> Path:
     if output.exists():
         if output.is_dir():
@@ -23,6 +27,7 @@ def resolve_output_path(output: Path, zsuffix: str) -> Path:
     raise click.UsageError(f"Invalid output path: {output}")
 
 @click.group()
+@click.version_option()
 def cli():
     """ Simple backup tool with zstd compression """
     pass
@@ -89,6 +94,55 @@ def create(sources, output, level, rclone, force):
     if rclone:
         click.echo(f"Uploading to {rclone}")
         upload_rclone(final_path, rclone)
+        
+@cli.command()
+@click.argument(
+    "backup",
+    type=click.Path(exists=True, path_type=Path)
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(path_type=Path),
+    default="."
+)
+@click.option(
+    "--no-checksum",
+    is_flag=True,
+    help="Skip checksum verification"
+)
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    help="Overwrite files in destination if they exist"
+)
+def restore(backup, output, no_checksum, force):
+    if backup.suffixes[-2:] != [".tar", ".zst"]:
+        raise click.UsageError("Backup must be a .tar.zst file")
+    
+    output.mkdir(parents=True, exist_ok=True)
+    
+    if not no_checksum:
+        click.echo("Verifying checksum...")
+        if not verify_sha256(backup):
+            raise click.ClickException("Checksum verification failed")
+        
+    click.echo("Decompressing backup...")
+    tar_path = None
+    try:
+        tar_path = decompress_zstd(backup)
+        click.echo("Extracting files...")
+        if not force and any(output.iterdir()):
+            raise click.UsageError(f"Output directory is not empty {output} (use --force)")
+        
+        extract_tar(tar_path, output)
+
+    finally:
+        if tar_path and tar_path.exists():
+            tar_path.unlink()
+            
+    click.echo("Restore completed succesfully")
         
 if __name__ == "__main__":
     cli()
