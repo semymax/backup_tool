@@ -82,7 +82,7 @@ When creating a backup:
 
 - When `--rclone` is provided, the backup file is uploaded using the `rclone` CLI.
 
-- If the output path does not include a file extension `.tar.zstd` willl be appended automatically.
+- If the output path does not include a file extension `.tar.zst` willl be appended automatically.
 
 In both cases:
 
