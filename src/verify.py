@@ -2,9 +2,9 @@ from pathlib import Path
 import hashlib
 
 def verify_sha256(archive: Path) -> bool:
-    checksum_file = archive.with_suffix(archive.suffix + ".sha256")
+    checksum_file = archive.with_name(archive.name + ".sha256")
     
-    if not checksum_file.exists():
+    if not checksum_file.is_file():
         return False
     
     expected = checksum_file.read_text().split()[0]

@@ -2,10 +2,10 @@ from pathlib import Path
 import hashlib
 
 def sha256(file_path: Path) -> Path:
-    hash_path = file_path.with_suffix(file_path.suffix + ".sha256")
+    hash_path = file_path.with_name(file_path.name + ".sha256")
     h = hashlib.sha256()
 
-    with open(file_path, "rb") as f:
+    with file_path.open("rb") as f:
         for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
             

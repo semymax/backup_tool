@@ -12,17 +12,18 @@ from src.decompress import decompress_zstd
 from src.extract import extract_tar
 from src.verify import verify_sha256
 
+from src.config import load_config, ConfigError
+
 def resolve_output_path(output: Path, zsuffix: str) -> Path:
-    if output.exists():
-        if output.is_dir():
+    if output.exists() and output.is_dir():
             base = f"backup-{datetime.now():%Y%m%d_%H%M%S}"
             return output / f"{base}{zsuffix}"
-        if output.is_file():
-            return output.with_suffix(zsuffix)
-        raise click.UsageError(f"Invalid output path: {output}")
+
+    if output.name.endswith(zsuffix):
+        return output
 
     if output.parent.exists():
-        return output.with_suffix(zsuffix)
+        return output.with_name(output.name + zsuffix)
     
     raise click.UsageError(f"Invalid output path: {output}")
 
@@ -53,15 +54,38 @@ def cli():
 )
 @click.option(
     "--rclone",
-    help="Rclone destiny (ex: remote:backups)"
+    help="Rclone destination (ex: remote:backups)"
 )
 @click.option(
-    "-f",
     "--force",
     is_flag=True,
     help="Overwrite output file if it already exists"
 )
-def create(sources, output, level, rclone, force):
+@click.option(
+    "--file",
+    "config_file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Load configuration from a JSON file"
+)
+def create(sources, output, level, rclone, force, config_file):
+    config = {}
+    if config_file:
+        try:
+            config = load_config(config_file).get("create", {})
+        except ConfigError as e:
+            raise click.ClickException(str(e))
+
+    if not sources:
+        sources = tuple(Path(p) for p in config.get("sources", []))
+
+    output = output if output != Path(".") else Path(
+        config.get("output", ".")
+    )
+    
+    level = level if level is not None else config.get("level", 3)
+    
+    rclone = rclone if rclone is not None else config.get("rclone")
+    
     if not sources:
         raise click.UsageError("No source provided")
 
@@ -98,6 +122,7 @@ def create(sources, output, level, rclone, force):
 @cli.command()
 @click.argument(
     "backup",
+    required=False,
     type=click.Path(exists=True, path_type=Path)
 )
 @click.option(
@@ -117,7 +142,32 @@ def create(sources, output, level, rclone, force):
     is_flag=True,
     help="Overwrite files in destination if they exist"
 )
-def restore(backup, output, no_checksum, force):
+@click.option(
+    "--file",
+    "config_file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Load configuration from a JSON file"
+)
+def restore(backup, output, no_checksum, force, config_file):
+    confoig = {}
+    if config_file:
+        try:
+            config = load_config(config_file).get("restore", {})
+        except ConfigError as e:
+            raise click.ClickException(str(e))
+        
+    if backup is None:
+        backup_value = Path(config.get("backup"))
+        if not backup_value:
+            raise click.UsageError("No backup file provided (CLI or config file)")
+
+        backup = Path(backup_value)
+    
+    output = output if output != Path(".") else Path(config.get("output", "."))
+    
+    if not no_checksum:
+        no_checksum = not config.get("checksum", True)
+    
     if backup.suffixes[-2:] != [".tar", ".zst"]:
         raise click.UsageError("Backup must be a .tar.zst file")
     

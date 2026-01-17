@@ -18,6 +18,7 @@ More information is available on the
 - Command Line Interface (CLI) built with
   [Click](https://click.palletsprojects.com/en/stable/)
 - Optional upload to cloud storage using `rclone`
+- Load configuration from a JSON file
 
 ---
 
@@ -52,26 +53,78 @@ This tool provides a CLI for creating and restoring backups.
 ```md
 python -m src.cli create [OPTIONS] [SOURCES]...
 
-Options
-
--o, --output PATH            Output path (directory or file name)
--l, --level INTEGER RANGE    Compression level for the zstd algorithm [0–22]
-                             (default: 3)
---rclone TEXT                Rclone destination (e.g. remote:backups)
--f, --force                  Overwrite output file if it already exists
---help                       Show this message and exit
+Options:
+  -o, --output PATH
+  -l, --level INTEGER RANGE  Level to be used for the zstd algorithm (0-22) (default: 3)
+  --rclone TEXT              Rclone destination (ex: remote:backups)
+  --force                    Overwrite output file if it already exists
+  --file PATH                Load configuration from a JSON file
+  --help                     Show this message and exit.
 ```
 
 `restore`:
 
 ```md
-python -m src.cli restore [OPTIONS] BACKUP
+python -m src.cli restore [OPTIONS] [BACKUP]
 
 Options:
   -o, --output PATH
   --no-checksum      Skip checksum verification
   -f, --force        Overwrite files in destination if they exist
+  --file PATH        Load configuration from a JSON file
   --help             Show this message and exit.
+```
+
+### JSON Config File
+
+As of now, version 1 of the configuration file structure is used:
+
+`example-config-file.json`:
+
+```json
+{
+    "version": 1,
+    "create": {
+        "sources": [
+            "/home/user/projects-example"
+        ],
+        "output": "/home/user/backups/projects-example-backup.tar.zst",
+        "level": 5,
+        "rclone": "gdrive:backups"
+    },
+    "restore": {
+        "backup": "/home/user/backups/projects-example-backup.tar.zst",
+        "output": "/home/user/restore",
+        "checksum": true
+    }
+}
+```
+
+Using the config file:
+
+```bash
+python -m src.cli create --file ./example-config-file.json
+```
+
+in this case, this is the same as:
+
+```bash
+python -m src.cli create /home/user/projects-example \
+  -o /home/user/backups/projects-example-backup.tar.zst \
+  -l 5 --rclone gdrive:backups
+```
+
+and
+
+```bash
+python -m src.cli restore --file ./example-config-file.json
+```
+
+is the same as:
+
+```bash
+python -m src.cli restore /home/user/backups/projects-example-backup.tar.zst \
+  -o /home/user/restore
 ```
 
 ### Notes
@@ -82,11 +135,12 @@ When creating a backup:
 
 - When `--rclone` is provided, the backup file is uploaded using the `rclone` CLI.
 
-- If the output path does not include a file extension `.tar.zst` willl be appended automatically.
+- If the output path does not include a file extension `.tar.zst` will be appended automatically.
 
 In both cases:
 
 - If the output file already exists and `--force` is not specified, the command will exit with an error.
+- When using a config file (with `--file`), values explicitly passed via cli will override values defined in the JSON file. So if a json file has `"level": 5` but `-l 20` is passed to the cli, the algorithm will use a level 20
 
 ### Examples
 
@@ -103,4 +157,10 @@ Create a backup and upload it to a cloud remote:
 python -m src.cli create /home/user/projects \
   -o /home/user/backups/projects-backup \
   --rclone gdrive:backups
+```
+
+Create a backup using a JSON file:
+
+```bash
+python -m src.cli create --file
 ```
