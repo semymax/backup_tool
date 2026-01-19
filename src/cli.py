@@ -1,7 +1,8 @@
 from pathlib import Path
+from datetime import datetime
+import tempfile
 import click
 import shutil
-from datetime import datetime
 
 from src.backup import create_tar
 from src.compress import compress_zstd
@@ -13,6 +14,8 @@ from src.extract import extract_tar
 from src.verify import verify_sha256
 
 from src.config import load_config, ConfigError
+
+from src.manifest import create_manifest, write_manifest
 
 def resolve_output_path(output: Path, zsuffix: str) -> Path:
     if output.exists() and output.is_dir():
@@ -100,15 +103,26 @@ def create(sources, output, level, rclone, force, config_file):
         final_path.parent.mkdir(parents=True, exist_ok=True)
 
     click.echo(f"Adding {len(sources)} source(s) to the backup file...")
-    tar_path = create_tar(list(sources))
-    
-    click.echo("Compressing with zstd...")
+    click.echo(f"Creating manifest...")
+    manifest = create_manifest(list(sources), "zstd", level, "backup-tool-python", click.get_current_context().command_path)
+    temp_dir = Path(tempfile.mkdtemp())
+    manifest_path = write_manifest(manifest, temp_dir)
+
     try:
+        tar_path = create_tar(list(sources), [manifest_path])
+        click.echo("Compressing with zstd...")
         zst_path = compress_zstd(tar_path, level)
     except Exception:
-        if tar_path.exists():
-            tar_path.unlink()
         raise
+    finally:
+        if tar_path and tar_path.exists():
+            tar_path.unlink()
+
+        if manifest_path.exists():
+            manifest_path.unlink()
+
+        if temp_dir.exists():
+            temp_dir.rmdir()
     
     shutil.move(zst_path, final_path)
     
