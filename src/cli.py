@@ -10,7 +10,7 @@ from src.checksum import sha256
 from src.upload import upload_rclone
 
 from src.decompress import decompress_zstd
-from src.extract import extract_tar
+from src.extract import safe_extract_tar, UnsafePathError
 from src.verify import verify_sha256
 
 from src.config import load_config, ConfigError
@@ -188,8 +188,9 @@ def restore(backup, output, no_checksum, force, config_file):
         
     # With --file provided, cli options will override it
     if backup is None:
-        backup_value = Path(config.get("backup"))
-        if not backup_value:
+        try:
+            backup_value = Path(config.get("backup"))
+        except TypeError:
             raise click.UsageError("No backup file provided (CLI or config file)")
 
         backup = Path(backup_value)
@@ -240,12 +241,14 @@ def restore(backup, output, no_checksum, force, config_file):
         if not force and any(output.iterdir()):
             raise click.UsageError(f"Output directory is not empty {output} (use --force)")
         
-        extract_tar(tar_path, output)
+        safe_extract_tar(tar_path, output, force=force)
 
     except UnsupportedManifestVersion as e:
         raise click.ClickException(str(e))
     except ManifestError as e:
         raise click.ClickException(f"Invalid backup manifest: {e}")
+    except UnsafePathError as e:
+        raise click.ClickException(f"Error: {e}")
 
     finally:
         if tar_path and tar_path.exists():
