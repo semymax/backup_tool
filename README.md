@@ -162,5 +162,5 @@ python -m src.cli create /home/user/projects \
 Create a backup using a JSON file:
 
 ```bash
-python -m src.cli create --file
+python -m src.cli create --file /home/user/projects/backup-projects-config.json
 ```

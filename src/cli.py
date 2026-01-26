@@ -67,7 +67,7 @@ def cli():
     "--level",
     "-l",
     type=click.IntRange(0, 22),
-    help="Level to be used for the zstd algorithm"
+    help="Level to be used for the zstd algorithm (default: 3)"
 )
 @click.option(
     "--rclone",
